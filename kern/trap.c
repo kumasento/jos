@@ -58,6 +58,11 @@ static const char *trapname(int trapno)
 	return "(unknown trap)";
 }
 
+void trap_divide();
+void trap_brkpt();
+void trap_gpflt();
+void trap_pgflt();
+void trap_syscall();
 
 void
 trap_init(void)
@@ -65,6 +70,11 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
+  SETGATE(idt[T_DIVIDE], 1, GD_KT, trap_divide, 0);
+  SETGATE(idt[T_BRKPT], 1, GD_KT, trap_brkpt, 3);
+  SETGATE(idt[T_GPFLT], 1, GD_KT, trap_gpflt, 0);
+  SETGATE(idt[T_PGFLT], 1, GD_KT, trap_pgflt, 0);
+  SETGATE(idt[T_SYSCALL], 1, GD_KT, trap_syscall, 3);
 
 	// Per-CPU setup 
 	trap_init_percpu();
@@ -144,6 +154,20 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
+  if (tf->tf_trapno == T_PGFLT && tf->tf_cs != GD_KT) 
+    page_fault_handler(tf);
+  else if (tf->tf_trapno == T_BRKPT) {
+    print_trapframe(tf);
+		monitor(NULL);
+  } else if (tf->tf_trapno == T_SYSCALL) {
+    tf->tf_regs.reg_eax = syscall(
+        tf->tf_regs.reg_eax, tf->tf_regs.reg_edx,
+        tf->tf_regs.reg_ecx, tf->tf_regs.reg_ebx,
+        tf->tf_regs.reg_edi, tf->tf_regs.reg_esi);
+
+		// env_destroy(curenv);
+    return;
+  }
 
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
